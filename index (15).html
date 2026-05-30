@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="DeepData"/>
+<link rel="apple-touch-icon" href="deepdata.png"/>
+<link rel="icon" href="deepdata.png"/>
+<title>DeepData — Marine Encyclopedia</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #020e1a; color: #e8f4f0; font-family: 'DM Sans', sans-serif; overflow: hidden; }
+  
+  header { 
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100; 
+    padding: env(safe-area-inset-top, 12px) 20px 12px; 
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(2,14,26,0.9);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .logo { font-family: 'Playfair Display', serif; font-size: 20px; color: #e8f4f0; }
+  .logo span { color: #1a9e75; }
+  .counter { font-size: 11px; font-weight: 500; color: #1a9e75; letter-spacing: 0.08em; text-transform: uppercase; background: rgba(26,158,117,0.12); border: 1px solid rgba(26,158,117,0.25); padding: 4px 10px; border-radius: 20px; }
+
+  #feed { 
+    height: 100svh; 
+    overflow-y: scroll; 
+    scroll-snap-type: y mandatory; 
+    -webkit-overflow-scrolling: touch; 
+    scrollbar-width: none;
+    padding-top: env(safe-area-inset-top, 50px);
+  }
+  #feed::-webkit-scrollbar { display: none; }
+
+  .card { 
+    height: 100svh;
+    scroll-snap-align: start; 
+    display: flex; 
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .card-image {
+    flex: 0 0 50%;
+    overflow: hidden;
+    position: relative;
+    background: #031d35;
+  }
+
+  .card-img { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+    object-position: center;
+  }
+
+  .card-info {
+    flex: 0 0 50%;
+    overflow-y: auto;
+    background: #020e1a;
+    padding: 20px 22px calc(env(safe-area-inset-bottom, 16px) + 16px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scrollbar-width: none;
+  }
+  .card-info::-webkit-scrollbar { display: none; }
+
+  .card-ocean { 
+    font-size: 10px; font-weight: 500; letter-spacing: 0.14em; 
+    text-transform: uppercase; color: #1a9e75; 
+    display: flex; align-items: center; gap: 6px; 
+  }
+  .card-ocean::before { content: ''; display: inline-block; width: 16px; height: 1px; background: #1a9e75; }
+
+  .card-name { 
+    font-family: 'Playfair Display', serif; 
+    font-size: clamp(22px, 6vw, 32px); 
+    font-weight: 700; line-height: 1.1; color: #fff; 
+  }
+
+  .card-scientific { 
+    font-family: 'Playfair Display', serif; 
+    font-style: italic; font-size: 12px; color: #6a9bb5; 
+  }
+
+  .card-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { 
+    font-size: 10px; font-weight: 500; letter-spacing: 0.06em; 
+    padding: 4px 10px; border-radius: 20px; 
+    border: 1px solid rgba(255,255,255,0.15); 
+    color: #6a9bb5; background: rgba(255,255,255,0.05); 
+  }
+  .tag.depth { border-color: rgba(26,158,117,0.3); color: #5fcfaa; }
+  .tag.size { border-color: rgba(201,168,76,0.3); color: #c9a84c; }
+
+  .divider { width: 32px; height: 1px; background: linear-gradient(to right, #1a9e75, transparent); }
+
+  .card-fact { 
+    font-size: 13px; font-weight: 300; line-height: 1.65; 
+    color: rgba(232,244,240,0.82); 
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Deep<span>Data</span></div>
+  <div class="counter" id="counter"></div>
+</header>
+<div id="feed"></div>
+<script>
+const SHEET_ID = '1IJFW_A_uOTHFiF87mqRi9nURK6IKEbaoEUTctEazqJ0';
+const FALLBACK = 'https://images.unsplash.com/photo-1518020382113-a7e8fc38eac9?w=800&q=80';
+
+async function getWikiImage(scientificName) {
+  try {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(scientificName)}&prop=pageimages&format=json&pithumbsize=1000&redirects=1&origin=*`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const pages = data.query.pages;
+    const page = Object.values(pages)[0];
+    return page?.thumbnail?.source || null;
+  } catch(e) {
+    return null;
+  }
+}
+
+async function loadAnimals() {
+  const url = `https://opensheet.elk.sh/${SHEET_ID}/Sheet1`;
+  const res = await fetch(url);
+  return await res.json();
+}
+
+function buildCard(a, imgSrc) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="card-image">
+      <img class="card-img" src="${imgSrc || FALLBACK}" onerror="this.src='${FALLBACK}'" loading="lazy"/>
+    </div>
+    <div class="card-info">
+      <div class="card-ocean">${a['Ocean'] || ''}</div>
+      <h2 class="card-name">${a['Animal Name'] || ''}</h2>
+      <p class="card-scientific">${a['Scientific Name'] || ''}</p>
+      <div class="card-tags">
+        ${a['Depth'] ? `<span class="tag depth">${a['Depth']}</span>` : ''}
+        ${a['Size'] ? `<span class="tag size">${a['Size']}</span>` : ''}
+        ${a['Lifespan'] ? `<span class="tag">${a['Lifespan']}</span>` : ''}
+      </div>
+      <div class="divider"></div>
+      <p class="card-fact">${a['Mind-Blowing Fact'] || ''}</p>
+    </div>`;
+  return card;
+}
+
+async function init() {
+  try {
+    const animals = await loadAnimals();
+    const feed = document.getElementById('feed');
+    document.getElementById('counter').textContent = `${animals.length} species`;
+    for (const a of animals) {
+      const scientific = a['Scientific Name'] || '';
+      const sheetImg = a['Image URL'] || '';
+      let imgSrc = sheetImg;
+      if (!imgSrc && scientific) {
+        imgSrc = await getWikiImage(scientific) || FALLBACK;
+      }
+      feed.appendChild(buildCard(a, imgSrc));
+    }
+  } catch(e) {
+    document.body.innerHTML += `<p style="color:red;padding:40px">${e.message}</p>`;
+  }
+}
+init();
+</script>
+</body>
+</html>
